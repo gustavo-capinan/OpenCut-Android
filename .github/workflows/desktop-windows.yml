@@ -1,0 +1,68 @@
+name: OpenCut Classic Portable Windows x64
+on:
+  workflow_dispatch:
+  push:
+    paths: ['OpenCut-Desktop-Build-Sources.zip', '.github/workflows/desktop-windows.yml']
+permissions:
+  contents: read
+jobs:
+  portable:
+    runs-on: windows-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: packaging
+      - uses: actions/checkout@v4
+        with:
+          repository: OpenCut-app/opencut-classic
+          ref: cf5e79e919144200294fb9fed22a222592a0aeea
+          path: source
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.22.0'
+      - name: Apply desktop packaging
+        shell: pwsh
+        run: |
+          Expand-Archive packaging/OpenCut-Desktop-Build-Sources.zip packaging-files
+          Copy-Item -Recurse packaging-files/desktop source/desktop
+      - name: Install upstream dependencies
+        working-directory: source
+        run: npx --yes bun@1.2.18 install --frozen-lockfile
+      - name: Install desktop dependencies
+        working-directory: source
+        run: npm ci --prefix desktop --workspaces=false
+      - name: Download Electron runtime
+        working-directory: source
+        run: node desktop/node_modules/electron/install.js
+      - name: Build editor with type checking
+        working-directory: source
+        run: node desktop/build-web.cjs
+      - name: Package portable executable
+        working-directory: source
+        run: npm --prefix desktop run dist
+      - name: Test packaged editor
+        working-directory: source
+        run: node desktop/smoke.cjs
+      - name: Test portable launcher
+        working-directory: source
+        run: node desktop/test-portable.cjs
+      - name: Calculate checksum
+        shell: pwsh
+        run: |
+          Get-ChildItem source/desktop/release/*.exe | ForEach-Object {
+            $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLower()
+            "$hash  $($_.Name)" | Set-Content -Encoding utf8 "$($_.FullName).sha256"
+          }
+      - uses: actions/upload-artifact@v4
+        with:
+          name: OpenCut-Classic-Portable-win-x64
+          if-no-files-found: error
+          retention-days: 30
+          path: |
+            source/desktop/release/*.exe
+            source/desktop/release/*.sha256
+            source/desktop/README.pt-BR.md
+            source/desktop/VALIDATION.md
+            source/desktop/test-results/*.json
+            source/desktop/test-results/*.png
