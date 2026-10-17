@@ -66,3 +66,12 @@ jobs:
             source/desktop/VALIDATION.md
             source/desktop/test-results/*.json
             source/desktop/test-results/*.png
+      - name: Preserve failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-test-diagnostics
+          retention-days: 7
+          path: |
+            source/desktop/test-results/*.json
+            source/desktop/test-results/*.png
